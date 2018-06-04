@@ -1,8 +1,6 @@
-[![Build Status](https://travis-ci.org/bitpay/cordova-plugin-qrscanner.svg?branch=master)](https://travis-ci.org/bitpay/cordova-plugin-qrscanner) [![npm](https://img.shields.io/npm/v/cordova-plugin-qrscanner.svg)](https://www.npmjs.com/package/cordova-plugin-qrscanner) [![npm](https://img.shields.io/npm/dm/cordova-plugin-qrscanner.svg)](https://www.npmjs.com/package/cordova-plugin-qrscanner)
-[![Dependency Status](https://david-dm.org/bitpay/cordova-plugin-qrscanner.svg)](https://david-dm.org/bitpay/cordova-plugin-qrscanner)
-[![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
+# cordova-plugin-background-barcode-scanner
+This plugin started based on **Bitpay**'s [QRScanner](https://github.com/bitpay/cordova-plugin-qrscanner).
 
-# cordova-plugin-qrscanner
 A fast, energy efficient, highly-configurable QR code scanner for Cordova apps – available for the iOS, Android, Windows, and browser platforms.
 
 QRScanner's native camera preview is rendered behind the Cordova app's webview, and QRScanner provides `show` and `hide` methods to toggle the transparency of the webview's background. This allows for a completely HTML/CSS/JS interface to be built inside the webview to control the scanner.
@@ -48,7 +46,7 @@ If there's a better place in your app's onboarding process to ask for permission
 // For the best user experience, make sure the user is ready to give your app
 // camera access before you show the prompt. On iOS, you only get one chance.
 
-QRScanner.prepare(onDone); // show the prompt
+BBScanner.prepare(onDone); // show the prompt
 
 function onDone(err, status){
   if (err) {
@@ -61,7 +59,7 @@ function onDone(err, status){
   } else if (status.denied) {
    // The video preview will remain black, and scanning is disabled. We can
    // try to ask the user to change their mind, but we'll have to send them
-   // to their device settings with `QRScanner.openSettings()`.
+   // to their device settings with `BBScanner.openSettings()`.
   } else {
     // we didn't get permission, but we didn't get permanently denied. (On
     // Android, a denial isn't permanent unless the user checks the "Don't
@@ -78,8 +76,8 @@ If you haven't previously `prepare`d the scanner, the `scan` method will first i
 
 ```js
 // Start a scan. Scanning will continue until something is detected or
-// `QRScanner.cancelScan()` is called.
-QRScanner.scan(displayContents);
+// `BBScanner.cancelScan()` is called.
+BBScanner.scan({format: cordova.plugins.BBScanner.types.QR_CODE},displayContents);
 
 function displayContents(err, text){
   if(err){
@@ -91,7 +89,7 @@ function displayContents(err, text){
 }
 
 // Make the webview transparent so the video preview is visible behind it.
-QRScanner.show();
+BBScanner.show();
 // Be sure to make any opaque HTML elements transparent here to avoid
 // covering the video.
 ```
@@ -117,7 +115,7 @@ Or alternatively, the library can be included in a page as-is, and the QRScanner
 On the browser platform, performance is improved by running the processing-intensive scanning operation in a [Web Worker](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API). For more information about the browser platform, see [Browser Platform Specific Details](#browser).
 
 ## API
-With the exception of `QRScanner.scan(callback)` and `QRScanner.getStatus(callback)`, all callbacks are optional.
+With the exception of `BBScanner.scan(callback)` and `BBScanner.getStatus(callback)`, all callbacks are optional.
 
 ### Prepare
 
@@ -131,10 +129,10 @@ var done = function(err, status){
   }
 };
 
-QRScanner.prepare(done);
+BBScanner.prepare(done);
 ```
 
-Request permission to access the camera (if not already granted), prepare the video preview, and configure everything needed by QRScanner. On platforms where possible, this also starts the video preview, saving valuable milliseconds and making it seem like the camera is starting instantly when `QRScanner.show()` is called. (These changes will only be visible to the user if `QRScanner.show()` has already made the webview transparent.)
+Request permission to access the camera (if not already granted), prepare the video preview, and configure everything needed by BBScanner. On platforms where possible, this also starts the video preview, saving valuable milliseconds and making it seem like the camera is starting instantly when `BBScanner.show()` is called. (These changes will only be visible to the user if `BBScanner.show()` has already made the webview transparent.)
 
 ### Scan
 
@@ -146,23 +144,23 @@ var callback = function(err, contents){
   alert('The QR Code contains: ' + contents);
 };
 
-QRScanner.scan(callback);
+BBScanner.scan({format: cordova.plugins.BBScanner.types.QR_CODE}, callback);
 ```
 
-Sets QRScanner to "watch" for valid QR codes. Once a valid code is detected, it's contents are passed to the callback, and scanning is toggled off. If `QRScanner.prepare()` has not been called, this method performs that setup as well. On platforms other than iOS and Android, the video preview must be visible for scanning to function.
+Sets QRScanner to "watch" for valid QR codes. Once a valid code is detected, it's contents are passed to the callback, and scanning is toggled off. If `BBScanner.prepare()` has not been called, this method performs that setup as well. On platforms other than iOS and Android, the video preview must be visible for scanning to function.
 
 ```js
-QRScanner.cancelScan(function(status){
+BBScanner.cancelScan(function(status){
   console.log(status);
 });
 ```
 
-Cancels the current scan. If `QRScanner.prepare()` has not been called, this method performs that setup as well. When a scan is canceled, the callback of the canceled `scan()` receives the `SCAN_CANCELED` error.
+Cancels the current scan. If `BBScanner.prepare()` has not been called, this method performs that setup as well. When a scan is canceled, the callback of the canceled `scan()` receives the `SCAN_CANCELED` error.
 
 ### Show
 
 ```js
-QRScanner.show(function(status){
+BBScanner.show(function(status){
   console.log(status);
 });
 ```
@@ -176,7 +174,7 @@ The [`show`](#show) and [`hide`](#hide) methods are the fastest way to toggle vi
 ### Hide
 
 ```js
-QRScanner.hide(function(status){
+BBScanner.hide(function(status){
   console.log(status);
 });
 ```
@@ -186,28 +184,28 @@ Configures the native webview to be opaque with a white background, covering the
 ### Lighting
 
 ```js
-QRScanner.enableLight(function(err, status){
+BBScanner.enableLight(function(err, status){
   err && console.error(err);
   console.log(status);
 });
 ```
 
-Enable the device's light (for scanning in low-light environments). If `QRScanner.prepare()` has not been called, this method performs that setup as well.
+Enable the device's light (for scanning in low-light environments). If `BBScanner.prepare()` has not been called, this method performs that setup as well.
 
 ```js
-QRScanner.disableLight(function(err, status){
+BBScanner.disableLight(function(err, status){
   err && console.error(err);
   console.log(status);
 });
 ```
 
-Disable the device's light. If `QRScanner.prepare()` has not been called, this method performs that setup as well.
+Disable the device's light. If `BBScanner.prepare()` has not been called, this method performs that setup as well.
 
 ### Camera Reversal
-QRScanner defaults to the back camera, but can be reversed. If `QRScanner.prepare()` has not been called, these methods perform that setup as well.
+QRScanner defaults to the back camera, but can be reversed. If `BBScanner.prepare()` has not been called, these methods perform that setup as well.
 
 ```js
-QRScanner.useFrontCamera(function(err, status){
+BBScanner.useFrontCamera(function(err, status){
   err && console.error(err);
   console.log(status);
 });
@@ -216,7 +214,7 @@ QRScanner.useFrontCamera(function(err, status){
 Switch video capture to the device's front camera.
 
 ```js
-QRScanner.useBackCamera(function(err, status){
+BBScanner.useBackCamera(function(err, status){
   err && console.error(err);
   console.log(status);
 });
@@ -227,7 +225,7 @@ Camera selection can also be done directly with the `useCamera` method.
 ```js
 var back = 0; // default camera on plugin initialization
 var front = 1;
-QRScanner.useCamera(front, function(err, status){
+BBScanner.useCamera(front, function(err, status){
   err && console.error(err);
   console.log(status);
 });
@@ -238,7 +236,7 @@ Switch video capture to the device's back camera.
 ### Video Preview Control
 
 ```js
-QRScanner.pausePreview(function(status){
+BBScanner.pausePreview(function(status){
   console.log(status);
 })
 ```
@@ -246,7 +244,7 @@ QRScanner.pausePreview(function(status){
 Pauses the video preview on the current frame (as if a snapshot was taken) and pauses scanning (if a scan is in progress).
 
 ```js
-QRScanner.resumePreview(function(status){
+BBScanner.resumePreview(function(status){
   console.log(status);
 })
 ```
@@ -256,10 +254,10 @@ Resumes the video preview and continues to scan (if a scan was in progress befor
 ### Open App Settings
 
 ```js
-QRScanner.getStatus(function(status){
+BBScanner.getStatus(function(status){
   if(!status.authorized && status.canOpenSettings){
     if(confirm("Would you like to enable QR code scanning? You can allow camera access in your settings.")){
-      QRScanner.openSettings();
+      BBScanner.openSettings();
     }
   }
 });
@@ -272,7 +270,7 @@ Note: iOS immediately kills all apps affected by permission changes in Settings.
 ### Get QRScanner Status
 
 ```js
-QRScanner.getStatus(function(status){
+BBScanner.getStatus(function(status){
   console.log(status);
 });
 ```
@@ -307,7 +305,7 @@ Name                             | Description
 `scanning`                       | A boolean value which is true if QRScanner is actively scanning for a QR code.
 `previewing`                     | A boolean value which is true if QRScanner is displaying a live preview from the device's camera. Set to false when the preview is paused.
 `lightEnabled`                   | A boolean value which is true if the light is enabled.
-`canOpenSettings`                | A boolean value which is true only if the users' operating system is able to `QRScanner.openSettings()`.
+`canOpenSettings`                | A boolean value which is true only if the users' operating system is able to `BBScanner.openSettings()`.
 `canEnableLight`                 | A boolean value which is true only if the users' device can enable a light in the direction of the currentCamera.
 `canChangeCamera`                | A boolean value which is true only if the current device "should" have a front camera. The camera may still not be capturable, which would emit error code 3, 4, or 5 when the switch is attempted. (On the browser platform, this value is false until the `prepare` method is called.)
 `currentCamera`                  | A number representing the index of the currentCamera. `0` is the back camera, `1` is the front.
@@ -316,7 +314,7 @@ Name                             | Description
 ### Destroy
 
 ```js
-QRScanner.destroy(function(status){
+BBScanner.destroy(function(status){
   console.log(status);
 });
 ```
@@ -327,7 +325,7 @@ Runs [`hide`](#hide), [`cancelScan`](#scan), stops video capture, removes the vi
 Many QRScanner functions accept a callback with an `error` parameter. When QRScanner experiences errors, this parameter contains a QRScannerError object with properties `name` (_String_), `code` (_Number_), and `_message` (_String_). When handling errors, rely only on the `name` or `code` parameter, as the specific content of `_message` is not considered part of the plugin's stable API. Particularly if your app is localized, it's also a good idea to provide your own `message` when informing the user of errors.
 
 ```js
-QRScanner.scan(function(err, contents){
+BBScanner.scan(function(err, contents){
   if(err){
     if(err.name === 'SCAN_CANCELED') {
       console.error('The scan was canceled before a QR code was found.');
@@ -343,13 +341,13 @@ QRScanner.scan(function(err, contents){
 
 Code | Name                        | Description
 ---: | :-------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-   0 | `UNEXPECTED_ERROR`          | An unexpected error. Returned only by bugs in QRScanner.
+   0 | `UNEXPECTED_ERROR`          | An unexpected error. Returned only by bugs in BBScanner.
    1 | `CAMERA_ACCESS_DENIED`      | The user denied camera access.
    2 | `CAMERA_ACCESS_RESTRICTED`  | Camera access is restricted (due to parental controls, organization security configuration profiles, or similar reasons).
    3 | `BACK_CAMERA_UNAVAILABLE`   | The back camera is unavailable.
    4 | `FRONT_CAMERA_UNAVAILABLE`  | The front camera is unavailable.
    5 | `CAMERA_UNAVAILABLE`        | The camera is unavailable because it doesn't exist or is otherwise unable to be configured. (Also returned if QRScanner cannot return one of the more specific `BACK_CAMERA_UNAVAILABLE` or `FRONT_CAMERA_UNAVAILABLE` errors.)
-   6 | `SCAN_CANCELED`             | Scan was canceled by the `cancelScan()` method. (Returned exclusively to the `QRScanner.scan()` method.)
+   6 | `SCAN_CANCELED`             | Scan was canceled by the `cancelScan()` method. (Returned exclusively to the `BBScanner.scan()` method.)
    7 | `LIGHT_UNAVAILABLE`         | The device light is unavailable because it doesn't exist or is otherwise unable to be configured.
    8 | `OPEN_SETTINGS_UNAVAILABLE` | The device is unable to open settings.
 
