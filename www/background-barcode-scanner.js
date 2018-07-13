@@ -181,24 +181,8 @@ exports.scan = function(options, callback) {
 	exec(success, errorCallback(callback), 'BBScanner', 'scan', [options]);
 }
 
-exports.cancelScan = function(callback) {
-	exec(doneCallback(callback), null, 'BBScanner', 'cancelScan', []);
-}
-
-exports.show = function(callback) {
-	exec(doneCallback(callback, true), null, 'BBScanner', 'show', []);
-}
-
-exports.hide = function(callback) {
-	exec(doneCallback(callback), null, 'BBScanner', 'hide', []);
-}
-
-exports.pausePreview = function(callback) {
-	exec(doneCallback(callback), null, 'BBScanner', 'pausePreview', []);
-}
-
-exports.resumePreview = function(callback) {
-	exec(doneCallback(callback), null, 'BBScanner', 'resumePreview', []);
+exports.stop = function(callback) {
+	exec(doneCallback(callback), null, 'BBScanner', 'stop', []);
 }
 
 exports.enableLight = function(callback) {
@@ -247,17 +231,20 @@ exports.getStatus = function(callback) {
 }
 
 exports.types = {
-	QR_CODE     : "QR_CODE",
-	UPC_E       : "UPC_E",
-	EAN_13      : "EAN_13",
-	EAN_8       : "EAN_8",
-	CODE_39     : "CODE_39",
-	CODE_93     : "CODE_93",
-	CODE_128    : "CODE_128",
-	PDF417      : "PDF417",
-	ITF         : "ITF",
-	DATA_MATRIX : "DATA_MATRIX",
-	CODABAR     : "CODABAR",
-	RSS_14      : "RSS_14",
-	RSS_EXPANDED : "RSS_EXPANDED"
+	"AZTEC": "AZTEC",
+	"CODABAR": "CODABAR",
+	"CODE_39": "CODE_39",
+	"CODE_93": "CODE_93",
+	"CODE_128": "CODE_128",
+	"DATA_MATRIX": "DATA_MATRIX",
+	"EAN_8": "EAN_8",
+	"EAN_13": "EAN_13",
+	"ITF": "ITF",
+	"PDF417": "PDF417",
+	"QR_CODE": "QR_CODE",
+	"RSS_14": "RSS_14",
+	"RSS_EXPANDED": "RSS_EXPANDED",
+	"UPC_A": "UPC_A",
+	"UPC_E": "UPC_E",
+	"UPC_EAN_EXTENSION": "UPC_EAN_EXTENSION"
 }
