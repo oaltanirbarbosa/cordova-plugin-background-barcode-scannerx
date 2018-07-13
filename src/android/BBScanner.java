@@ -26,6 +26,7 @@ import android.hardware.Camera;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
 import android.util.Log;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
@@ -103,10 +104,10 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
                 });
                 return true;
             }
-            else if(action.equals("cancelScan")) {
+            else if(action.equals("stop")) {
                 cordova.getThreadPool().execute(new Runnable() {
                     public void run() {
-                        cancelScan(callbackContext);
+                        stop(callbackContext);
                     }
                 });
                 return true;
@@ -455,7 +456,9 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
         this.cordova.getActivity().runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                webView.getView().setBackgroundColor(Color.WHITE);
+                // webView.getView().setBackgroundColor(Color.WHITE);
+                if ( mBarcodeView != null )
+                    mBarcodeView.setVisibility(View.INVISIBLE);
             }
         });
         showing = false;
@@ -499,7 +502,7 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
                 formatList.add(BarcodeFormat.RSS_14);
                 formatList.add(BarcodeFormat.PDF_417);
                 formatList.add(BarcodeFormat.RSS_EXPANDED);
-                mBarcodeView.setDecoderFactory(new DefaultDecoderFactory(formatList, null, null));
+                mBarcodeView.setDecoderFactory( new DefaultDecoderFactory(formatList) );
 
                 //Configure the camera (front/back)
                 CameraSettings settings = new CameraSettings();
@@ -530,13 +533,13 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
 
         if ( this.scanType != null ){
             if ( barcodeResult.getBarcodeFormat() != this.scanType ){
-                Log.d("BBScan",  "====== NOOOO");
+                // Log.d("BBScan",  "====== NOOOO");
                 return;
             }
         }
 
         if(barcodeResult.getText() != null) {
-            Log.d("BBScan",  "====== Ooook: "+barcodeResult.getText());
+            // Log.d("BBScan",  "====== Ooook: "+barcodeResult.getText());
             scanning = false;
             mBarcodeView.stopDecoding();
             this.nextScanCallback.success(barcodeResult.getText());
@@ -645,6 +648,9 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
             this.cordova.getActivity().runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    webView.getView().setBackgroundColor(Color.argb(1, 0, 0, 0));
+                    showing = true;
+                    mBarcodeView.setVisibility(View.VISIBLE);
                     if (mBarcodeView != null) {
                         // mBarcodeView.decodeSingle(b);
                         mBarcodeView.decodeContinuous(b);
@@ -654,10 +660,11 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
         }
     }
 
-    private void cancelScan(final CallbackContext callbackContext) {
+    private void stop(final CallbackContext callbackContext) {
         this.cordova.getActivity().runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                makeOpaque();
                 scanning = false;
                 if (mBarcodeView != null) {
                     mBarcodeView.stopDecoding();
@@ -675,6 +682,7 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
             public void run() {
                 webView.getView().setBackgroundColor(Color.argb(1, 0, 0, 0));
                 showing = true;
+                mBarcodeView.setVisibility(View.VISIBLE);
                 getStatus(callbackContext);
             }
         });

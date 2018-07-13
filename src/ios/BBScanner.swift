@@ -1,54 +1,84 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
+
 
 @objc(BBScanner)
-class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
+class BBScanner : CDVPlugin, ZXCaptureDelegate {
 
     class CameraView: UIView {
-        var videoPreviewLayer:AVCaptureVideoPreviewLayer?
+        var _capture:ZXCapture?
 
-        func interfaceOrientationToVideoOrientation(_ orientation : UIInterfaceOrientation) -> AVCaptureVideoOrientation {
+
+        //        func interfaceOrientationToVideoOrientation(_ orientation : UIInterfaceOrientation) -> AVCaptureVideoOrientation {
+        //            switch (orientation) {
+        //            case UIInterfaceOrientation.portrait:
+        //                return AVCaptureVideoOrientation.portrait;
+        //            case UIInterfaceOrientation.portraitUpsideDown:
+        //                return AVCaptureVideoOrientation.portraitUpsideDown;
+        //            case UIInterfaceOrientation.landscapeLeft:
+        //                return AVCaptureVideoOrientation.landscapeLeft;
+        //            case UIInterfaceOrientation.landscapeRight:
+        //                return AVCaptureVideoOrientation.landscapeRight;
+        //            default:
+        //                return AVCaptureVideoOrientation.portraitUpsideDown;
+        //            }
+        //        }
+
+        func addPreviewLayer(_ capture:ZXCapture){
+
+            capture.layer.frame = self.bounds
+            self.layer.addSublayer(capture.layer)
+
+            let orientation:UIInterfaceOrientation = UIApplication.shared.statusBarOrientation
+
+            var scanRectRotation:CGFloat;
+            var captureRotation:Double;
+
             switch (orientation) {
-            case UIInterfaceOrientation.portrait:
-                return AVCaptureVideoOrientation.portrait;
-            case UIInterfaceOrientation.portraitUpsideDown:
-                return AVCaptureVideoOrientation.portraitUpsideDown;
-            case UIInterfaceOrientation.landscapeLeft:
-                return AVCaptureVideoOrientation.landscapeLeft;
-            case UIInterfaceOrientation.landscapeRight:
-                return AVCaptureVideoOrientation.landscapeRight;
-            default:
-                return AVCaptureVideoOrientation.portraitUpsideDown;
+                case UIInterfaceOrientation.portrait:
+                    captureRotation = 0;
+                    scanRectRotation = 90;
+                    break;
+                case UIInterfaceOrientation.landscapeLeft:
+                    captureRotation = 90;
+                    scanRectRotation = 180;
+                    break;
+                case UIInterfaceOrientation.landscapeRight:
+                    captureRotation = 270;
+                    scanRectRotation = 0;
+                    break;
+                case UIInterfaceOrientation.portraitUpsideDown:
+                    captureRotation = 180;
+                    scanRectRotation = 270;
+                    break;
+                default:
+                    captureRotation = 0;
+                    scanRectRotation = 90;
+                    break;
             }
-        }
-
-        override func layoutSubviews() {
-            super.layoutSubviews();
-            if let sublayers = self.layer.sublayers {
-                for layer in sublayers {
-                    layer.frame = self.bounds;
-                }
-            }
-
-            self.videoPreviewLayer?.connection.videoOrientation = interfaceOrientationToVideoOrientation(UIApplication.shared.statusBarOrientation);
-        }
 
 
-        func addPreviewLayer(_ previewLayer:AVCaptureVideoPreviewLayer?) {
-            previewLayer!.videoGravity = AVLayerVideoGravityResizeAspectFill
-            previewLayer!.frame = self.bounds
-            self.layer.addSublayer(previewLayer!)
-            self.videoPreviewLayer = previewLayer;
+            capture.transform = CGAffineTransform( rotationAngle: CGFloat((captureRotation / 180 * .pi)) )
+            capture.rotation  = scanRectRotation
+
+            self._capture = capture
+
+            // TODO: Create a scanFrame
+
         }
 
         func removePreviewLayer() {
-            self.videoPreviewLayer!.removeFromSuperlayer()
-            self.videoPreviewLayer = nil
+            self._capture?.layer.removeFromSuperlayer()
+            self._capture = nil
         }
+
     }
 
     var cameraView: CameraView!
-    var captureSession:AVCaptureSession?
+    var capture: ZXCapture!
+
+    // var captureSession:AVCaptureSession?
     var captureVideoPreviewLayer:AVCaptureVideoPreviewLayer?
     var metaOutput: AVCaptureMetadataOutput?
 
@@ -85,16 +115,23 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
     override func pluginInitialize() {
         super.pluginInitialize()
         NotificationCenter.default.addObserver(self, selector: #selector(pageDidLoad), name: NSNotification.Name.CDVPageDidLoad, object: nil)
-        self.cameraView = CameraView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height))
-        self.cameraView.autoresizingMask = [.flexibleWidth, .flexibleHeight];
+        self.initSubView()
     }
 
+    func initSubView() {
+        if self.cameraView == nil {
+            self.cameraView = CameraView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height))
+            self.cameraView.autoresizingMask = [.flexibleWidth, .flexibleHeight];
+        }
+    }
+
+    // Send error to console javascript
     func sendErrorCode(command: CDVInvokedUrlCommand, error: ScannerError){
         let pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: error.rawValue)
         commandDelegate!.send(pluginResult, callbackId:command.callbackId)
     }
 
-    // utility method
+    // Create a background thread task
     func backgroundThread(delay: Double = 0.0, background: (() -> Void)? = nil, completion: (() -> Void)? = nil) {
         if #available(iOS 8.0, *) {
             DispatchQueue.global(qos: DispatchQoS.QoSClass.userInitiated).async {
@@ -118,6 +155,7 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         }
     }
 
+    // Prepare the scanner with view
     func prepScanner(command: CDVInvokedUrlCommand) -> Bool{
         let status = AVCaptureDevice.authorizationStatus(forMediaType: AVMediaTypeVideo)
         if (status == AVAuthorizationStatus.restricted) {
@@ -128,45 +166,22 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
             return false
         }
         do {
-            if (captureSession?.isRunning != true){
-                cameraView.backgroundColor = UIColor.white
-                self.webView!.superview!.insertSubview(cameraView, belowSubview: self.webView!)
-                let availableVideoDevices = AVCaptureDevice.devices(withMediaType: AVMediaTypeVideo)
-                for device in availableVideoDevices as! [AVCaptureDevice] {
-                    if device.position == AVCaptureDevicePosition.back {
-                        backCamera = device
-                    }
-                    else if device.position == AVCaptureDevicePosition.front {
-                        frontCamera = device
-                    }
-                }
-                // older iPods have no back camera
-                if(backCamera == nil){
-                    currentCamera = 1
-                }
-                let input: AVCaptureDeviceInput
-                input = try self.createCaptureDeviceInput()
-                captureSession = AVCaptureSession()
-                captureSession!.addInput(input)
-                metaOutput = AVCaptureMetadataOutput()
-                captureSession!.addOutput(metaOutput)
-                metaOutput!.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-                metaOutput!.metadataObjectTypes = [
-                    AVMetadataObjectTypeQRCode,
-                    AVMetadataObjectTypeUPCECode,
-                    AVMetadataObjectTypeCode39Code,
-                    AVMetadataObjectTypeEAN13Code,
-                    AVMetadataObjectTypeEAN8Code,
-                    AVMetadataObjectTypeCode93Code,
-                    AVMetadataObjectTypeCode128Code,
-                    AVMetadataObjectTypePDF417Code,
-                    AVMetadataObjectTypeITF14Code,
-                    AVMetadataObjectTypeDataMatrixCode
-                ]
-                captureVideoPreviewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-                cameraView.addPreviewLayer(captureVideoPreviewLayer)
-                captureSession!.startRunning()
+
+            if ( self.capture != nil ){
+                return true;
             }
+
+            self.initSubView()
+
+            self.capture = ZXCapture.init()
+            self.capture.delegate  = self
+            self.capture.camera    = self.capture.back()
+            self.capture.focusMode = AVCaptureFocusMode.continuousAutoFocus
+
+            cameraView.backgroundColor = UIColor.white
+            self.webView!.superview!.insertSubview(cameraView, belowSubview: self.webView!)
+            cameraView.addPreviewLayer(self.capture)
+
             return true
         } catch CaptureError.backCameraUnavailable {
             self.sendErrorCode(command: command, error: ScannerError.back_camera_unavailable)
@@ -181,29 +196,29 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         return false
     }
 
-    func createCaptureDeviceInput() throws -> AVCaptureDeviceInput {
-        var captureDevice: AVCaptureDevice
-        if(currentCamera == 0){
-            if(backCamera != nil){
-                captureDevice = backCamera!
-            } else {
-                throw CaptureError.backCameraUnavailable
-            }
-        } else {
-            if(frontCamera != nil){
-                captureDevice = frontCamera!
-            } else {
-                throw CaptureError.frontCameraUnavailable
-            }
-        }
-        let captureDeviceInput: AVCaptureDeviceInput
-        do {
-            captureDeviceInput = try AVCaptureDeviceInput(device: captureDevice)
-        } catch let error as NSError {
-            throw CaptureError.couldNotCaptureInput(error: error)
-        }
-        return captureDeviceInput
-    }
+    //    func createCaptureDeviceInput() throws -> AVCaptureDeviceInput {
+    //        var captureDevice: AVCaptureDevice
+    //        if(currentCamera == 0){
+    //            if(backCamera != nil){
+    //                captureDevice = backCamera!
+    //            } else {
+    //                throw CaptureError.backCameraUnavailable
+    //            }
+    //        } else {
+    //            if(frontCamera != nil){
+    //                captureDevice = frontCamera!
+    //            } else {
+    //                throw CaptureError.frontCameraUnavailable
+    //            }
+    //        }
+    //        let captureDeviceInput: AVCaptureDeviceInput
+    //        do {
+    //            captureDeviceInput = try AVCaptureDeviceInput(device: captureDevice)
+    //        } catch let error as NSError {
+    //            throw CaptureError.couldNotCaptureInput(error: error)
+    //        }
+    //        return captureDeviceInput
+    //    }
 
     func makeOpaque(){
         // self.webView?.isOpaque = true
@@ -240,44 +255,85 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         }
     }
 
-    // This method processes metadataObjects captured by iOS.
-    func captureOutput(_ captureOutput: AVCaptureOutput!, didOutputMetadataObjects metadataObjects: [Any]!, from connection: AVCaptureConnection!) {
-        if metadataObjects == nil || metadataObjects.count == 0 || scanning == false {
-            // while nothing is detected, or if scanning is false, do nothing.
-            return
-        }
-        let found = metadataObjects[0] as! AVMetadataMachineReadableCodeObject
-        let data:[String: Any]  = nextScanningCommand?.arguments[0] as! [String: Any]
-        if !data.isEmpty {
-            if data["format"] != nil {
-                if ( getBarcodeFormatFromString(type: data["format"] as! String) != found.type ){
-                    return
-                }
-            }
+
+    // Capture data
+    func captureResult(_ capture: ZXCapture!, result: ZXResult!) {
+        if ( result == nil || scanning == false ) {
+            return;
         }
 
-        if  found.stringValue != nil {
-            scanning = false
-            let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: found.stringValue)
+        if result != nil && result.text != nil {
+            let options:Dictionary<String, Any> = self.nextScanningCommand?.arguments[0] as! Dictionary<String, Any>
+
+            if !options.isEmpty {
+                if options["format"] != nil {
+                    let format:ZXBarcodeFormat = self.stringToBarcodeFormat(format: options["format"] as! String)
+                    if ( format != result.barcodeFormat ){
+                        return
+                    }
+                }
+            }
+
+            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+            let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: result.text)
             commandDelegate!.send(pluginResult, callbackId: nextScanningCommand?.callbackId!)
             nextScanningCommand = nil
+            scanning = false
+            self.capture.stop()
+
+//            let deadlineTime = DispatchTime.now() + .milliseconds(500)
+//            DispatchQueue.main.asyncAfter(deadline: deadlineTime) {
+//                self.capture.start()
+//            }
+
+        }
+
+
+    }
+
+    // Return an ZXBarcodeFormat from a string
+    func stringToBarcodeFormat(format: String)->ZXBarcodeFormat{
+        switch format {
+            case "AZTEC": return kBarcodeFormatAztec
+            case "CODABAR": return kBarcodeFormatCodabar
+            case "CODE_39": return kBarcodeFormatCode39
+            case "CODE_93": return kBarcodeFormatCode93
+            case "CODE_128": return kBarcodeFormatCode128
+            case "DATA_MATRIX": return kBarcodeFormatDataMatrix
+            case "EAN_8": return kBarcodeFormatEan8
+            case "EAN_13": return kBarcodeFormatEan13
+            case "ITF": return kBarcodeFormatITF
+            case "PDF417": return kBarcodeFormatPDF417
+            case "QR_CODE": return kBarcodeFormatQRCode
+            case "RSS_14": return kBarcodeFormatRSS14
+            case "RSS_EXPANDED": return kBarcodeFormatRSSExpanded
+            case "UPC_A": return kBarcodeFormatUPCA
+            case "UPC_E": return kBarcodeFormatUPCE
+            case "UPC_EAN_EXTENSION": return kBarcodeFormatUPCEANExtension
+            default: return kBarcodeFormatEan13
         }
     }
 
-    // Return an AVMetadataObjectType from a string
-    func getBarcodeFormatFromString(format: String)->String{
-        switch format {
-            case "QR_CODE": return AVMetadataObjectTypeQRCode
-            case "UPC_E": return AVMetadataObjectTypeUPCECode
-            case "CODE_39": return AVMetadataObjectTypeCode39Code
-            case "EAN_13": return AVMetadataObjectTypeEAN13Code
-            case "EAN_8": return AVMetadataObjectTypeEAN8Code
-            case "CODE_93": return AVMetadataObjectTypeCode93Code
-            case "CODE_128": return AVMetadataObjectTypeCode128Code
-            case "PDF417": return AVMetadataObjectTypePDF417Code
-            case "ITF": return AVMetadataObjectTypeITF14Code
-            case "DATA_MATRIX": return AVMetadataObjectTypeDataMatrixCode
-            default: return AVMetadataObjectTypeEAN13Code
+    // Return an String from ZXBarcodeFormat
+    func barcodeFormatToString(format:ZXBarcodeFormat)->String {
+        switch (format) {
+            case kBarcodeFormatAztec: return "AZTEC";
+            case kBarcodeFormatCodabar: return "CODABAR";
+            case kBarcodeFormatCode39: return "CODE_39";
+            case kBarcodeFormatCode93: return "CODE_93";
+            case kBarcodeFormatCode128: return "CODE_128";
+            case kBarcodeFormatDataMatrix: return "DATA_MATRIX";
+            case kBarcodeFormatEan8: return "EAN_8";
+            case kBarcodeFormatEan13: return "EAN_13";
+            case kBarcodeFormatITF: return "ITF";
+            case kBarcodeFormatPDF417: return "PDF417";
+            case kBarcodeFormatQRCode: return "QR_CODE";
+            case kBarcodeFormatRSS14: return "RSS_14";
+            case kBarcodeFormatRSSExpanded: return "RSS_EXPANDED";
+            case kBarcodeFormatUPCA: return "UPCA";
+            case kBarcodeFormatUPCE: return "UPC_E";
+            case kBarcodeFormatUPCEANExtension: return "UPC_EAN_EXTENSION";
+            default: return "UNKNOWN";
         }
     }
 
@@ -288,6 +344,7 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
 
     // ---- BEGIN EXTERNAL API ----
 
+    // Prepare the plugin
     func prepare(_ command: CDVInvokedUrlCommand){
         let status = AVCaptureDevice.authorizationStatus(forMediaType: AVMediaTypeVideo)
         if (status == AVAuthorizationStatus.notDetermined) {
@@ -296,6 +353,9 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
                 // attempt to prepScanner only after the request returns
                 self.backgroundThread(delay: 0, completion: {
                     if(self.prepScanner(command: command)){
+                        self.makeOpaque()
+                        self.cameraView.isHidden = true
+                        self.capture.stop()
                         self.getStatus(command)
                     }
                 })
@@ -308,15 +368,26 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
     }
 
     func scan(_ command: CDVInvokedUrlCommand){
-        if(self.prepScanner(command: command)){
+        if self.prepScanner(command: command) {
             nextScanningCommand = command
             scanning = true
+
+            self.webView?.isOpaque        = false
+            self.webView?.backgroundColor = UIColor.clear
+            self.cameraView.isHidden      = false
+            if !self.capture.running {
+                self.capture.start()
+            }
         }
     }
 
-    func cancelScan(_ command: CDVInvokedUrlCommand){
-        if(self.prepScanner(command: command)){
+    func stop(_ command: CDVInvokedUrlCommand){
+        if self.prepScanner(command: command) {
             scanning = false
+            self.makeOpaque()
+            self.cameraView.isHidden = true
+            self.capture.stop()
+
             if(nextScanningCommand != nil){
                 self.sendErrorCode(command: nextScanningCommand!, error: ScannerError.scan_canceled)
             }
@@ -324,78 +395,48 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         }
     }
 
-    func show(_ command: CDVInvokedUrlCommand) {
-        self.webView?.isOpaque = false
-        self.webView?.backgroundColor = UIColor.clear
-        self.cameraView.isHidden = false
-        self.getStatus(command)
-    }
-
-    func hide(_ command: CDVInvokedUrlCommand) {
-        self.makeOpaque()
-        self.cameraView.isHidden = true
-        self.getStatus(command)
-    }
-
-    func pausePreview(_ command: CDVInvokedUrlCommand) {
-        if(scanning){
-            paused = true;
-            scanning = false;
-        }
-        captureVideoPreviewLayer?.connection.isEnabled = false
-        self.getStatus(command)
-    }
-
-    func resumePreview(_ command: CDVInvokedUrlCommand) {
-        if(paused){
-            paused = false;
-            scanning = true;
-        }
-        captureVideoPreviewLayer?.connection.isEnabled = true
-        self.getStatus(command)
-    }
 
     // backCamera is 0, frontCamera is 1
 
     func useCamera(_ command: CDVInvokedUrlCommand){
         let index = command.arguments[0] as! Int
-        if(currentCamera != index){
-            // camera change only available if both backCamera and frontCamera exist
-            if(backCamera != nil && frontCamera != nil){
-                // switch camera
-                currentCamera = index
-                if(self.prepScanner(command: command)){
-                    do {
-                        captureSession!.beginConfiguration()
-                        let currentInput = captureSession?.inputs[0] as! AVCaptureDeviceInput
-                        captureSession!.removeInput(currentInput)
-                        let input = try self.createCaptureDeviceInput()
-                        captureSession!.addInput(input)
-                        captureSession!.commitConfiguration()
-                        self.getStatus(command)
-                    } catch CaptureError.backCameraUnavailable {
-                        self.sendErrorCode(command: command, error: ScannerError.back_camera_unavailable)
-                    } catch CaptureError.frontCameraUnavailable {
-                        self.sendErrorCode(command: command, error: ScannerError.front_camera_unavailable)
-                    } catch CaptureError.couldNotCaptureInput(let error){
-                        print(error.localizedDescription)
-                        self.sendErrorCode(command: command, error: ScannerError.camera_unavailable)
-                    } catch {
-                        self.sendErrorCode(command: command, error: ScannerError.unexpected_error)
-                    }
-
-                }
-            } else {
-                if(backCamera == nil){
-                    self.sendErrorCode(command: command, error: ScannerError.back_camera_unavailable)
-                } else {
-                    self.sendErrorCode(command: command, error: ScannerError.front_camera_unavailable)
-                }
-            }
-        } else {
-            // immediately return status if camera is unchanged
-            self.getStatus(command)
-        }
+//        if(currentCamera != index){
+//            // camera change only available if both backCamera and frontCamera exist
+//            if(backCamera != nil && frontCamera != nil){
+//                // switch camera
+//                currentCamera = index
+//                if(self.prepScanner(command: command)){
+//                    do {
+//                        captureSession!.beginConfiguration()
+//                        let currentInput = captureSession?.inputs[0] as! AVCaptureDeviceInput
+//                        captureSession!.removeInput(currentInput)
+//                        let input = try self.createCaptureDeviceInput()
+//                        captureSession!.addInput(input)
+//                        captureSession!.commitConfiguration()
+//                        self.getStatus(command)
+//                    } catch CaptureError.backCameraUnavailable {
+//                        self.sendErrorCode(command: command, error: ScannerError.back_camera_unavailable)
+//                    } catch CaptureError.frontCameraUnavailable {
+//                        self.sendErrorCode(command: command, error: ScannerError.front_camera_unavailable)
+//                    } catch CaptureError.couldNotCaptureInput(let error){
+//                        print(error.localizedDescription)
+//                        self.sendErrorCode(command: command, error: ScannerError.camera_unavailable)
+//                    } catch {
+//                        self.sendErrorCode(command: command, error: ScannerError.unexpected_error)
+//                    }
+//
+//                }
+//            } else {
+//                if(backCamera == nil){
+//                    self.sendErrorCode(command: command, error: ScannerError.back_camera_unavailable)
+//                } else {
+//                    self.sendErrorCode(command: command, error: ScannerError.front_camera_unavailable)
+//                }
+//            }
+//        } else {
+//            // immediately return status if camera is unchanged
+//            self.getStatus(command)
+//        }
     }
 
     func enableLight(_ command: CDVInvokedUrlCommand) {
@@ -410,15 +451,20 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         }
     }
 
+    // Destroy a plugin
     func destroy(_ command: CDVInvokedUrlCommand) {
         self.makeOpaque()
-        if(self.captureSession != nil){
+        if self.cameraView != nil {
+            self.cameraView.isHidden = true
+        }
+
+        if self.capture != nil {
+            self.capture.stop()
             backgroundThread(delay: 0, background: {
-                self.captureSession!.stopRunning()
                 self.cameraView.removePreviewLayer()
-                self.captureVideoPreviewLayer = nil
-                self.metaOutput = nil
-                self.captureSession = nil
+                self.cameraView.removeFromSuperview()
+                self.cameraView = nil
+                self.capture = nil
                 self.currentCamera = 0
                 self.frontCamera = nil
                 self.backCamera = nil
@@ -430,6 +476,8 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         }
     }
 
+
+    // Return the plugin's status to javscript console
     func getStatus(_ command: CDVInvokedUrlCommand){
 
         let authorizationStatus = AVCaptureDevice.authorizationStatus(forMediaType: AVMediaTypeVideo);
@@ -450,14 +498,14 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         }
 
         var prepared = false
-        if(captureSession?.isRunning == true){
+        if self.capture != nil && self.capture.running == true {
             prepared = true
         }
 
         var previewing = false
-        if(captureVideoPreviewLayer != nil){
-            previewing = captureVideoPreviewLayer!.connection.isEnabled
-        }
+//        if(captureVideoPreviewLayer != nil){
+//            previewing = captureVideoPreviewLayer!.connection.isEnabled
+//        }
 
         var showing = false
         if(self.webView!.backgroundColor == UIColor.clear){
@@ -475,21 +523,21 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         }
 
         var canEnableLight = false
-        if(backCamera?.hasTorch == true && backCamera?.isTorchAvailable == true && backCamera?.isTorchModeSupported(AVCaptureTorchMode.on) == true){
-            canEnableLight = true
-        }
+//        if(backCamera?.hasTorch == true && backCamera?.isTorchAvailable == true && backCamera?.isTorchModeSupported(AVCaptureTorchMode.on) == true){
+//            canEnableLight = true
+//        }
 
         var canChangeCamera = false;
-        if(backCamera != nil && frontCamera != nil){
-            canChangeCamera = true
-        }
+//        if(backCamera != nil && frontCamera != nil){
+//            canChangeCamera = true
+//        }
 
         let status = [
             "authorized": boolToNumberString(bool: authorized),
             "denied": boolToNumberString(bool: denied),
             "restricted": boolToNumberString(bool: restricted),
             "prepared": boolToNumberString(bool: prepared),
-            "scanning": boolToNumberString(bool: scanning),
+            "scanning": boolToNumberString(bool: self.scanning),
             "previewing": boolToNumberString(bool: previewing),
             "showing": boolToNumberString(bool: showing),
             "lightEnabled": boolToNumberString(bool: lightEnabled),
@@ -503,6 +551,8 @@ class BBScanner : CDVPlugin, AVCaptureMetadataOutputObjectsDelegate {
         commandDelegate!.send(pluginResult, callbackId:command.callbackId)
     }
 
+
+    // Open native settings
     func openSettings(_ command: CDVInvokedUrlCommand) {
         if #available(iOS 10.0, *) {
             guard let settingsUrl = URL(string: UIApplicationOpenSettingsURLString) else {
