@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 import AudioToolbox
-
+import ZXingObjC
 
 @objc(BBScanner)
 class BBScanner : CDVPlugin, ZXCaptureDelegate {
