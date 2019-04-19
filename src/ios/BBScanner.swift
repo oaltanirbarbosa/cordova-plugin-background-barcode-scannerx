@@ -88,6 +88,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
 
     var scanning: Bool = false
     var paused: Bool = false
+    var multipleScan: Bool = false
     var nextScanningCommand: CDVInvokedUrlCommand?
 
     enum ScannerError: Int32 {
@@ -157,7 +158,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
 
     // Prepare the scanner with view
     func prepScanner(command: CDVInvokedUrlCommand) -> Bool{
-        let status = AVCaptureDevice.authorizationStatus(forMediaType: AVMediaTypeVideo)
+        let status = AVCaptureDevice.authorizationStatus(for: AVMediaType.video)
         if (status == AVAuthorizationStatus.restricted) {
             self.sendErrorCode(command: command, error: ScannerError.camera_access_restricted)
             return false
@@ -165,6 +166,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
             self.sendErrorCode(command: command, error: ScannerError.camera_access_denied)
             return false
         }
+
         do {
 
             if ( self.capture != nil ){
@@ -176,7 +178,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
             self.capture = ZXCapture.init()
             self.capture.delegate  = self
             self.capture.camera    = self.capture.back()
-            self.capture.focusMode = AVCaptureFocusMode.continuousAutoFocus
+            self.capture.focusMode = AVCaptureDevice.FocusMode.continuousAutoFocus
 
             cameraView.backgroundColor = UIColor.white
             self.webView!.superview!.insertSubview(cameraView, belowSubview: self.webView!)
@@ -234,9 +236,9 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
     }
 
     func configureLight(command: CDVInvokedUrlCommand, state: Bool){
-        var useMode = AVCaptureTorchMode.on
+        var useMode = AVCaptureDevice.TorchMode.on
         if(state == false){
-            useMode = AVCaptureTorchMode.off
+            useMode = AVCaptureDevice.TorchMode.off
         }
         do {
             // torch is only available for back camera
@@ -276,10 +278,14 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
 
             AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
             let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: result.text)
+            pluginResult?.setKeepCallbackAs(multipleScan)
             commandDelegate!.send(pluginResult, callbackId: nextScanningCommand?.callbackId!)
-            nextScanningCommand = nil
-            scanning = false
-            self.capture.stop()
+
+            if !multipleScan {
+                nextScanningCommand = nil
+                scanning = false
+                self.capture.stop()
+            }
 
 //            let deadlineTime = DispatchTime.now() + .milliseconds(500)
 //            DispatchQueue.main.asyncAfter(deadline: deadlineTime) {
@@ -337,7 +343,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
         }
     }
 
-    func pageDidLoad() {
+    @objc func pageDidLoad() {
         self.webView?.isOpaque = false
         self.webView?.backgroundColor = UIColor.clear
     }
@@ -345,11 +351,12 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
     // ---- BEGIN EXTERNAL API ----
 
     // Prepare the plugin
+    @objc
     func prepare(_ command: CDVInvokedUrlCommand){
-        let status = AVCaptureDevice.authorizationStatus(forMediaType: AVMediaTypeVideo)
+        let status = AVCaptureDevice.authorizationStatus(for: AVMediaType.video)
         if (status == AVAuthorizationStatus.notDetermined) {
             // Request permission before preparing scanner
-            AVCaptureDevice.requestAccess(forMediaType: AVMediaTypeVideo, completionHandler: { (granted) -> Void in
+            AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { (granted) -> Void in
                 // attempt to prepScanner only after the request returns
                 self.backgroundThread(delay: 0, completion: {
                     if(self.prepScanner(command: command)){
@@ -367,10 +374,19 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
         }
     }
 
+    @objc
     func scan(_ command: CDVInvokedUrlCommand){
         if self.prepScanner(command: command) {
             nextScanningCommand = command
             scanning = true
+
+            if let options = command.argument(at: 0) as? Dictionary<String, Any> {
+                if let multipleScan = options["multipleScan"] as? Bool {
+                    self.multipleScan = multipleScan
+                } else {
+                    self.multipleScan = false
+                }
+            }
 
             self.webView?.isOpaque        = false
             self.webView?.backgroundColor = UIColor.clear
@@ -381,6 +397,21 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
         }
     }
 
+    @objc
+    func pause(_ command: CDVInvokedUrlCommand) {
+        scanning = false
+        let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
+        commandDelegate!.send(pluginResult, callbackId:command.callbackId)
+    }
+
+    @objc
+    func resume(_ command: CDVInvokedUrlCommand) {
+        scanning = true
+        let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
+        commandDelegate!.send(pluginResult, callbackId:command.callbackId)
+    }
+
+    @objc
     func stop(_ command: CDVInvokedUrlCommand){
         if self.prepScanner(command: command) {
             scanning = false
@@ -395,9 +426,22 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
         }
     }
 
+    @objc
+    func snap(_ command: CDVInvokedUrlCommand) {
+        if self.prepScanner(command: command) {
+            let image = UIImage(cgImage: self.capture.lastScannedImage)
+            let resizedImage = image.resizeImage(640, opaque: true)
+            let data = UIImagePNGRepresentation(resizedImage)
+            let base64 = data?.base64EncodedString()
+            let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: base64)
+            commandDelegate!.send(pluginResult, callbackId:command.callbackId)
+        }
+    }
+
 
     // backCamera is 0, frontCamera is 1
 
+    @objc
     func useCamera(_ command: CDVInvokedUrlCommand){
         let index = command.arguments[0] as! Int
 //        if(currentCamera != index){
@@ -452,6 +496,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
     }
 
     // Destroy a plugin
+    @objc
     func destroy(_ command: CDVInvokedUrlCommand) {
         self.makeOpaque()
         if self.cameraView != nil {
@@ -478,9 +523,10 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
 
 
     // Return the plugin's status to javscript console
+    @objc
     func getStatus(_ command: CDVInvokedUrlCommand){
 
-        let authorizationStatus = AVCaptureDevice.authorizationStatus(forMediaType: AVMediaTypeVideo);
+        let authorizationStatus = AVCaptureDevice.authorizationStatus(for: AVMediaType.video);
 
         var authorized = false
         if(authorizationStatus == AVAuthorizationStatus.authorized){
@@ -513,7 +559,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
         }
 
         var lightEnabled = false
-        if(backCamera?.torchMode == AVCaptureTorchMode.on){
+        if(backCamera?.torchMode == AVCaptureDevice.TorchMode.on){
             lightEnabled = true
         }
 
@@ -553,6 +599,7 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
 
 
     // Open native settings
+    @objc
     func openSettings(_ command: CDVInvokedUrlCommand) {
         if #available(iOS 10.0, *) {
             guard let settingsUrl = URL(string: UIApplicationOpenSettingsURLString) else {
@@ -574,5 +621,47 @@ class BBScanner : CDVPlugin, ZXCaptureDelegate {
                 self.sendErrorCode(command: command, error: ScannerError.open_settings_unavailable)
             }
         }
+    }
+}
+
+extension UIImage {
+    func resizeImage(_ dimension: CGFloat, opaque: Bool, contentMode: UIViewContentMode = .scaleAspectFit) -> UIImage {
+        var width: CGFloat
+        var height: CGFloat
+        var newImage: UIImage
+
+        let size = self.size
+        let aspectRatio =  size.width/size.height
+
+        switch contentMode {
+            case .scaleAspectFit:
+                if aspectRatio > 1 {                            // Landscape image
+                    width = dimension
+                    height = dimension / aspectRatio
+                } else {                                        // Portrait image
+                    height = dimension
+                    width = dimension * aspectRatio
+                }
+
+        default:
+            fatalError("UIIMage.resizeToFit(): FATAL: Unimplemented ContentMode")
+        }
+
+        if #available(iOS 10.0, *) {
+            let renderFormat = UIGraphicsImageRendererFormat.default()
+            renderFormat.opaque = opaque
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: renderFormat)
+            newImage = renderer.image {
+                (context) in
+                self.draw(in: CGRect(x: 0, y: 0, width: width, height: height))
+            }
+        } else {
+            UIGraphicsBeginImageContextWithOptions(CGSize(width: width, height: height), opaque, 0)
+                self.draw(in: CGRect(x: 0, y: 0, width: width, height: height))
+                newImage = UIGraphicsGetImageFromCurrentImageContext()!
+            UIGraphicsEndImageContext()
+        }
+
+        return newImage
     }
 }
