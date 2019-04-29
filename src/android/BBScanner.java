@@ -952,7 +952,7 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
                     Bitmap image = sourceData.getBitmap();
 
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    image.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+                    image.compress(Bitmap.CompressFormat.PNG, 100, baos);
                     byte[] b = baos.toByteArray();
                     String imageEncoded = Base64.encodeToString(b, Base64.DEFAULT);
                     PluginResult result = new PluginResult(PluginResult.Status.OK, imageEncoded);
