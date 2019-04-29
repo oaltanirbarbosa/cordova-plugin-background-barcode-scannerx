@@ -230,6 +230,27 @@ exports.getStatus = function(callback) {
 	exec(doneCallback(callback), null, 'BBScanner', 'getStatus', []);
 }
 
+exports.snap = function(callback) {
+	if ( !callback || typeof callback !== 'function') {
+		throw new Error('No callback provided to snap method.');
+	}
+	exec(callback, null, 'BBScanner', 'snap', []);
+}
+
+exports.pause = function(callback) {
+	if ( !callback || typeof callback !== 'function') {
+		throw new Error('No callback provided to snap method.');
+	}
+	exec(callback, null, 'BBScanner', 'pause', []);
+}
+
+exports.resume = function(callback) {
+	if ( !callback || typeof callback !== 'function') {
+		throw new Error('No callback provided to snap method.');
+	}
+	exec(callback, null, 'BBScanner', 'resume', []);
+}
+
 exports.types = {
 	"AZTEC": "AZTEC",
 	"CODABAR": "CODABAR",

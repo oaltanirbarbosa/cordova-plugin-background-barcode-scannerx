@@ -1,3 +1,13 @@
+<a name="3.1.0"></a>
+# [2.5.0](https://github.com/bitpay/cordova-plugin-qrscanner/compare/3.0.1...3.1.0) (2019-04-29)
+
+
+### Features
+
+* **snap:** add new method to get the base64 camera preview image
+* **pause:** add new method to pause the barcode scanner and keep the camera preview active
+* **resume:** add new method to resume the barcode scanner
+
 <a name="2.5.0"></a>
 # [2.5.0](https://github.com/bitpay/cordova-plugin-qrscanner/compare/2.4.1...v2.5.0) (2017-02-15)
 
