@@ -4,7 +4,9 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.FeatureInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.net.Uri;
 
@@ -14,8 +16,13 @@ import com.journeyapps.barcodescanner.BarcodeCallback;
 import com.journeyapps.barcodescanner.BarcodeResult;
 import com.journeyapps.barcodescanner.BarcodeView;
 import com.journeyapps.barcodescanner.DefaultDecoderFactory;
+import com.journeyapps.barcodescanner.SourceData;
+import com.journeyapps.barcodescanner.camera.CameraInstance;
 import com.journeyapps.barcodescanner.camera.CameraSettings;
+import com.journeyapps.barcodescanner.camera.PreviewCallback;
+
 import org.apache.cordova.CallbackContext;
+import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
 import org.apache.cordova.PermissionHelper;
@@ -25,11 +32,13 @@ import org.json.JSONObject;
 import android.hardware.Camera;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -63,6 +72,8 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
     private boolean keepDenied = false;
     private boolean appPausedWithActivePreview = false;
     private BarcodeFormat scanType = null;
+    private boolean multipleScan = false;
+    private final Object LOCK = new Object();
 
     static class BBScannerError {
         private static final int UNEXPECTED_ERROR = 0,
@@ -99,7 +110,38 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
                             scanType = null;
                         }
 
+                        try{
+                            data = (JSONObject)args.get(0);
+                            multipleScan = data.getBoolean("multipleScan");
+                        }catch (JSONException e){
+                            multipleScan = false;
+                        }
+
                         scan(callbackContext);
+                    }
+                });
+                return true;
+            }
+            else if(action.equals("pause")) {
+                cordova.getThreadPool().execute(new Runnable() {
+                    public void run() {
+                        pauseScan(callbackContext);
+                    }
+                });
+                return true;
+            }
+            else if(action.equals("resume")) {
+                cordova.getThreadPool().execute(new Runnable() {
+                    public void run() {
+                        resumeScan(callbackContext);
+                    }
+                });
+                return true;
+            }
+            else if(action.equals("snap")) {
+                cordova.getThreadPool().execute(new Runnable() {
+                    public void run() {
+                        snap(callbackContext);
                     }
                 });
                 return true;
@@ -527,6 +569,10 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
 
     @Override
     public void barcodeResult(BarcodeResult barcodeResult) {
+        if (!this.scanning) {
+            return;
+        }
+
         if (this.nextScanCallback == null) {
             return;
         }
@@ -540,11 +586,19 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
 
         if(barcodeResult.getText() != null) {
             // Log.d("BBScan",  "====== Ooook: "+barcodeResult.getText());
-            scanning = false;
-            mBarcodeView.stopDecoding();
-            this.nextScanCallback.success(barcodeResult.getText());
-            this.nextScanCallback = null;
-            this.scanType = null;
+            PluginResult result = new PluginResult(PluginResult.Status.OK, barcodeResult.getText());
+            CallbackContext callback = this.nextScanCallback;
+
+            if (this.multipleScan) {
+                result.setKeepCallback(true);
+            } else {
+                scanning = false;
+                mBarcodeView.stopDecoding();
+                this.nextScanCallback = null;
+                this.scanType = null;
+            }
+
+            callback.sendPluginResult(result);
         }
         else {
             scan(this.nextScanCallback);
@@ -851,5 +905,68 @@ public class BBScanner extends CordovaPlugin implements BarcodeCallback {
         closeCamera();
         currentCameraId = 0;
         getStatus(callbackContext);
+    }
+
+    private void pauseScan(CallbackContext callbackContext) {
+        if (!scanning) {
+            callbackContext.success();
+            return;
+        }
+        scanning = false;
+        this.cordova.getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mBarcodeView.stopDecoding();
+                PluginResult result = new PluginResult(PluginResult.Status.OK);
+                callbackContext.sendPluginResult(result);
+            }
+        });
+    }
+
+    private void resumeScan(CallbackContext callbackContext) {
+        if (scanning) {
+            callbackContext.success();
+            return;
+        }
+        final BarcodeCallback barcodeCallback = this;
+        scanning = true;
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mBarcodeView.decodeContinuous(barcodeCallback);
+                PluginResult result = new PluginResult(PluginResult.Status.OK);
+                callbackContext.sendPluginResult(result);
+            }
+        });
+    }
+
+    private void snap(CallbackContext callbackContext) {
+        Rect rect = mBarcodeView.getPreviewFramingRect();
+
+        CameraInstance camera = mBarcodeView.getCameraInstance();
+        camera.requestPreview(new PreviewCallback() {
+            @Override
+            public void onPreview(SourceData sourceData) {
+                synchronized (LOCK) {
+                    sourceData.setCropRect(rect);
+                    Bitmap image = sourceData.getBitmap();
+
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    image.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+                    byte[] b = baos.toByteArray();
+                    String imageEncoded = Base64.encodeToString(b, Base64.DEFAULT);
+                    PluginResult result = new PluginResult(PluginResult.Status.OK, imageEncoded);
+                    callbackContext.sendPluginResult(result);
+                }
+            }
+
+            @Override
+            public void onPreviewError(Exception e) {
+                synchronized (LOCK) {
+                    PluginResult result = new PluginResult(PluginResult.Status.ERROR);
+                    callbackContext.sendPluginResult(result);
+                }
+            }
+        });
     }
 }

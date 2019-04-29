@@ -147,10 +147,11 @@ var callback = function(err, contents){
   alert('The QR Code contains: ' + contents);
 };
 
-BBScanner.scan({format: cordova.plugins.BBScanner.types.QR_CODE}, callback);
+BBScanner.scan({format: cordova.plugins.BBScanner.types.QR_CODE, multipleScan: false}, callback);
 ```
 
 Sets QRScanner to "watch" for valid QR codes. Once a valid code is detected, it's contents are passed to the callback, and scanning is toggled off. If `BBScanner.prepare()` has not been called, this method performs that setup as well. On platforms other than iOS and Android, the video preview must be visible for scanning to function.
+With the `multipleScan` option is it possibile to retrieve more than one barcode per scan calls, the preview is not stopped. Be aware of the sequential scans, combine it with `pause` and `resume` for the best user experience.
 
 ```js
 BBScanner.cancelScan(function(status){
@@ -418,6 +419,22 @@ If more cameras are available, the "front" camera is then chosen from the highes
 The browser platform always returns the boolean `status.canEnableLight` as `false`, and the enableLight/disableLight methods throw the `LIGHT_UNAVAILABLE` error code.
 
 `status.canEnableLight` is camera specific, meaning it will return `false` if the camera in use does not have a flash.
+
+### Snap
+
+Creates a snapshot of the current camera preview and returns it in base64 format.
+
+**Attention! On Android the scan mode should be paused before call `snap` or the image won't be returned**.
+
+Use `pause` method to stop barcode scanning keeping the camera preview active and then `resume` to reactivate the scan.
+
+### Pause scan
+
+Call the `pause` method to stop the scan keeping the camera preview active. Call `resume` to reactivate the scan.
+
+### Resume scan
+
+Call `resume` method to reactivate the scan process. If scan is already active it has no effect.
 
 #### Using Status.authorized
 

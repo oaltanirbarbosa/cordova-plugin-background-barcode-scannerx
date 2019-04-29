@@ -3,8 +3,8 @@ repositories {
 }
 
 dependencies {
-	compile 'com.journeyapps:zxing-android-embedded:3.6.0'
-    compile 'com.android.support:appcompat-v7:27.1.1'
+	implementation 'com.journeyapps:zxing-android-embedded:3.6.0'
+    implementation 'com.android.support:appcompat-v7:27.1.1'
 }
 
 android {
