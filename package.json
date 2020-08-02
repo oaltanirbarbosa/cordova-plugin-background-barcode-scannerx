@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-background-barcode-scannerx",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Fast, energy-efficient, highly-configurable QR code scanner.",
   "cordova": {
     "id": "cordova-plugin-background-barcode-scannerx",
