@@ -36,11 +36,15 @@
       </feature>
     </config-file>
     <dependency id="cordova-plugin-add-swift-support" spec="~1.7.2" />
-	<dependency id="cordova-plugin-cocoapod-support" version="1.5.0" />
 
-	<pods-config ios-min-version="9.0" use-frameworks="true" />
-
-	<pod name="ZXingObjC" version="3.2.2" />
+    <podspec>
+      <config>
+        <source url="https://github.com/CocoaPods/Specs.git"/>
+      </config>
+      <pods use-frameworks="true">
+        <pod name="ZXingObjC" />
+      </pods>
+    </podspec>
 
     <source-file src="src/ios/BBScanner.swift"/>
 
