@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <plugin xmlns="http://www.phonegap.com/ns/plugins/1.0"
-        id="cordova-plugin-background-barcode-scanner"
-        version="3.2.0">
+        id="cordova-plugin-background-barcode-scannerx"
+        version="3.2.1">
 
   <name>BBScanner</name>
 
